@@ -1,0 +1,5 @@
+*.pt
+bus.jpg
+__pycache__/
+.ipynb_checkpoints/
+test_images/
