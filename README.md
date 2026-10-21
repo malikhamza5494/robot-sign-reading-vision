@@ -75,9 +75,32 @@ On six realistic test photos, `robot_see_v2` passed **5 of 6** scenes:
 
 The multi-strategy reader takes about **0.5–0.7 s per frame on a Colab T4 GPU** (the executed notebooks in this repo were run on a 2-core CPU, about 15 s per frame). That is far slower than a 30 fps camera, so on a robot it should be gated: run OCR only when a board-like region is detected or every N-th frame, and stop as soon as one strategy returns a confident, valid command.
 
+### 5. Perspective rectification with a 4-point homography (notebook 03)
+
+The realistic-photo failure above comes from **out-of-plane rotation**: an oblique board becomes a trapezoid, and rotation-only deskew cannot undo that. Notebook `03` simulates oblique views with a pinhole camera model (yaw 0–75°, plus 10° roll) and compares two readers:
+
+- **A — rotation-only deskew** (the multi-strategy reader from notebook 02)
+- **B — homography rectification:** detect the board's 4 corners (`approxPolyDP`, convex-hull fallback), map them to an upright rectangle with the board's known 2:1 aspect ratio (`cv2.getPerspectiveTransform`), then read
+
+![Rectification example](results/rectification_example.png)
+
+At 60° yaw the foreshortened board looks taller than it is wide, so rotation-only deskew even turns it by 90°; the homography restores an upright, undistorted board.
+
+| Yaw | A: deskew | B: homography |
+|---|---|---|
+| 0–55° | 4/4 per angle | 4/4 per angle |
+| 65° | 3/4 | **4/4** |
+| 70° | 2/4 | **4/4** |
+| 75° | 2/4 | **4/4** |
+| **Total** | **27/32** | **32/32** |
+
+![Angle sweep](results/angle_sweep.png)
+
+Using the object model (known aspect ratio) matters: estimating the aspect from the image squashes the letters, because the apparent width of an oblique board is foreshortened. These are synthetic views; the next step is to confirm the gain on real oblique photos.
+
 ## Limitations and next steps
 
-- **Perspective distortion** — add 4-corner detection and `cv2.getPerspectiveTransform`, as in document-scanner apps.
+- **Perspective distortion** — addressed on synthetic views by 4-point homography rectification (notebook 03); corner detection still relies on the colour mask, so a learned corner detector or **deep homography estimation** against the board template would be more robust to occlusion and clutter. Real-photo validation is pending.
 - **Colour-only localisation is a weak cue** — red backgrounds produce false candidates; check for text inside candidates or train a small sign detector.
 - **`min_area` trade-off** — lower values find distant boards but admit more red blobs. For distant signs, a behavioural fix also works: approach, then read again.
 - **Synthetic test images are cleaner than a real camera** — results need confirming on a real robot camera.
@@ -89,6 +112,7 @@ The multi-strategy reader takes about **0.5–0.7 s per frame on a Colab T4 GPU*
 |---|---|
 | `01_detection_and_ocr_baseline.ipynb` | OpenCV fundamentals, YOLOv8 detection, EasyOCR baseline and command mapping |
 | `02_robust_sign_reading_pipeline.ipynb` | Stress tests, ROI + deskew + enhancement pipeline, `robot_see`, multi-strategy `robot_see_v2`, limitations |
+| `03_perspective_rectification_homography.ipynb` | Oblique-view simulation, rotation-only deskew vs. 4-point homography rectification, angle sweep |
 | `results/` | Figures used in this README |
 | `requirements.txt` | Python dependencies |
 
